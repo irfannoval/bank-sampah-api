@@ -9,12 +9,20 @@ import { rp, tanggal } from '../../lib/format';
 
 const daftar = usePaged('/admin/penarikan');
 const filter = ref('');
+const banks = ref([]);
 const muatDaftar = () => daftar.cari({ status: filter.value });
-onMounted(muatDaftar);
+onMounted(async () => {
+    try {
+        banks.value = await api.get('/gateway/banks');
+    } catch (e) {
+        daftar.galat.value = e.message;
+    }
+    await muatDaftar();
+});
 
 const nasabah = ref(null);
 const kartuId = ref(null);
-const form = ref({ nominal: '', tipe: 'e-wallet', nomor: '' });
+const form = ref({ nominal: '', bank: '', nomor: '' });
 const rincian = ref(null);   // { biaya_admin, nominal_diterima, nama }
 const kunci = ref(null);
 const pin = ref('');
@@ -23,7 +31,7 @@ const proses = ref(false);
 const sukses = ref(null);
 
 const nominalAngka = computed(() => form.value.nominal.replace(/\D/g, ''));
-const siapPeriksa = computed(() => nasabah.value && nominalAngka.value && form.value.nomor.trim());
+const siapPeriksa = computed(() => nasabah.value && nominalAngka.value && form.value.bank && form.value.nomor.trim());
 
 function pilih({ nasabah: n, kartuId: k }) {
     nasabah.value = n;
@@ -33,7 +41,7 @@ function pilih({ nasabah: n, kartuId: k }) {
 function reset() {
     nasabah.value = null;
     kartuId.value = null;
-    form.value = { nominal: '', tipe: 'e-wallet', nomor: '' };
+    form.value = { nominal: '', bank: '', nomor: '' };
     rincian.value = null;
     pin.value = '';
     galat.value = '';
@@ -45,7 +53,7 @@ async function periksa() {
     try {
         const [b, r] = await Promise.all([
             api.get(`/admin/penarikan/biaya?nominal=${nominalAngka.value}`),
-            api.post('/admin/penarikan/validasi-rekening', { tujuan_tipe: form.value.tipe, tujuan_nomor: form.value.nomor.trim() }),
+            api.post('/admin/penarikan/validasi-rekening', { tujuan_bank: form.value.bank, tujuan_nomor: form.value.nomor.trim() }),
         ]);
         rincian.value = { ...b, nama: r.nama };
         kunci.value = buatKunci();
@@ -62,7 +70,7 @@ async function proses_() {
     try {
         const r = await api.post(
             '/admin/penarikan',
-            { nasabah_id: nasabah.value.id, nominal: nominalAngka.value, tujuan_tipe: form.value.tipe, tujuan_nomor: form.value.nomor.trim(), pin: pin.value },
+            { nasabah_id: nasabah.value.id, nominal: nominalAngka.value, tujuan_bank: form.value.bank, tujuan_nomor: form.value.nomor.trim(), pin: pin.value },
             { idem: kunci.value }
         );
         sukses.value = { ...r, nama: nasabah.value.nama };
@@ -82,7 +90,7 @@ const warna = { pending: 'kuning', berhasil: 'hijau', gagal: 'merah' };
 <template>
     <AdminLayout judul="Penarikan Nasabah">
         <p v-if="sukses" class="card mb-4 !border-brand-600 !bg-brand-50" role="status" data-testid="sukses">
-            Penarikan {{ rp(sukses.nominal) }} untuk {{ sukses.nama }} diproses. Nasabah menerima {{ rp(sukses.nominal_diterima) }} (status: {{ sukses.status }}).
+            Penarikan {{ rp(sukses.nominal) }} untuk {{ sukses.nama }} diproses. Nasabah menerima {{ rp(sukses.nominal_diterima) }}. {{ sukses.ref_gateway ? `Referensi Midtrans: ${sukses.ref_gateway}` : 'Payout belum mendapat referensi; sistem akan mencoba ulang.' }}
         </p>
 
         <section class="card mb-6">
@@ -93,8 +101,11 @@ const warna = { pending: 'kuning', berhasil: 'hijau', gagal: 'merah' };
                 <div class="grid gap-3 sm:grid-cols-3">
                     <div><label class="label" for="p-nominal">Jumlah penarikan (Rp)</label><input id="p-nominal" v-model="form.nominal" class="input" inputmode="numeric" :disabled="!!rincian"></div>
                     <div>
-                        <label class="label" for="p-tipe">Tujuan</label>
-                        <select id="p-tipe" v-model="form.tipe" class="input" :disabled="!!rincian"><option value="e-wallet">E-wallet</option><option value="bank">Rekening bank</option></select>
+                        <label class="label" for="p-bank">Bank tujuan</label>
+                        <select id="p-bank" v-model="form.bank" class="input" :disabled="!!rincian || !banks.length">
+                            <option value="" disabled>Pilih bank</option>
+                            <option v-for="bank in banks" :key="bank.code" :value="bank.code">{{ bank.name }}</option>
+                        </select>
                     </div>
                     <div><label class="label" for="p-nomor">Nomor tujuan</label><input id="p-nomor" v-model="form.nomor" class="input" inputmode="numeric" :disabled="!!rincian"></div>
                 </div>
@@ -132,7 +143,9 @@ const warna = { pending: 'kuning', berhasil: 'hijau', gagal: 'merah' };
             <div v-for="p in daftar.items.value" :key="p.id" class="card !flex-row items-center justify-between !p-4">
                 <div>
                     <strong>{{ p.nama }}</strong> <span class="text-sm text-muted">{{ p.kode_nasabah }}</span>
-                    <div class="text-sm text-muted">{{ tanggal(p.created_at) }} · {{ p.tujuan_tipe }} {{ p.tujuan_nomor }}</div>
+                    <div class="text-sm text-muted">{{ tanggal(p.created_at) }} · {{ p.tujuan_bank }} {{ p.tujuan_nomor }}</div>
+                    <div v-if="p.ref_gateway" class="text-xs text-muted">Referensi Midtrans: {{ p.ref_gateway }}</div>
+                    <div v-else-if="p.status === 'pending'" class="text-xs text-amber-700">Menunggu pengiriman ulang ke gateway.</div>
                 </div>
                 <div class="text-right"><div class="font-bold">{{ rp(p.nominal) }}</div><Badge :teks="p.status" :warna="warna[p.status]" /></div>
             </div>

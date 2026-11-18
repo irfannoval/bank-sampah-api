@@ -12,14 +12,12 @@ use Illuminate\Support\Facades\DB;
 /** Semua endpoint untuk peran 'nasabah' (aplikasi pelengkap kartu). */
 class NasabahAppController extends Controller
 {
-    public function __construct(private PenarikanService $penarikan)
-    {
-    }
+    public function __construct(private PenarikanService $penarikan) {}
 
     private function nasabah(Request $request): object
     {
         $n = DB::table('nasabah')->where('user_id', $request->user()->id)->first();
-        if (!$n) {
+        if (! $n) {
             throw new ApiException('TIDAK_BERWENANG', 'Akun ini bukan nasabah.', 403);
         }
 
@@ -70,7 +68,7 @@ class NasabahAppController extends Controller
     {
         $n = $this->nasabah($request);
         $s = DB::table('setoran')->where('id', $id)->where('nasabah_id', $n->id)->first(['id', 'total_berat', 'total_nilai', 'status', 'created_at']);
-        if (!$s) {
+        if (! $s) {
             throw new ApiException('SETORAN_TIDAK_DITEMUKAN', 'Setoran tidak ditemukan.', 404);
         }
         $rincian = DB::table('detail_setoran')->join('jenis_sampah', 'jenis_sampah.id', '=', 'detail_setoran.jenis_sampah_id')
@@ -90,30 +88,33 @@ class NasabahAppController extends Controller
 
     public function biayaPenarikan(Request $request): JsonResponse
     {
-        $data = $request->validate(['nominal' => ['required', 'regex:' . self::REGEX_NOMINAL]]);
+        $data = $request->validate(['nominal' => ['required', 'regex:'.self::REGEX_NOMINAL]]);
 
         return response()->json($this->penarikan->biaya($data['nominal']));
     }
 
     public function validasiRekening(Request $request): JsonResponse
     {
-        $data = $request->validate(['tujuan_tipe' => ['required', 'in:bank,e-wallet'], 'tujuan_nomor' => ['required', 'string', 'max:40']]);
+        $data = $request->validate([
+            'tujuan_bank' => ['required', 'string', 'max:60'],
+            'tujuan_nomor' => ['required', 'string', 'max:40'],
+        ]);
 
-        return response()->json($this->penarikan->validasiRekening($data['tujuan_tipe'], $data['tujuan_nomor']));
+        return response()->json($this->penarikan->validasiRekening($data['tujuan_bank'], $data['tujuan_nomor']));
     }
 
     public function ajukanPenarikan(Request $request): JsonResponse
     {
         $n = $this->nasabah($request);
         $data = $request->validate([
-            'nominal' => ['required', 'regex:' . self::REGEX_NOMINAL],
-            'tujuan_tipe' => ['required', 'in:bank,e-wallet'],
+            'nominal' => ['required', 'regex:'.self::REGEX_NOMINAL],
+            'tujuan_bank' => ['required', 'string', 'max:60'],
             'tujuan_nomor' => ['required', 'string', 'max:40'],
             'pin' => ['required', 'digits:6'],
         ]);
 
         return response()->json(
-            $this->penarikan->ajukan($request->user(), $n->id, $data['nominal'], $data['tujuan_tipe'], $data['tujuan_nomor'], $data['pin']),
+            $this->penarikan->ajukan($request->user(), $n->id, $data['nominal'], $data['tujuan_bank'], $data['tujuan_nomor'], $data['pin']),
             201
         );
     }
@@ -124,7 +125,7 @@ class NasabahAppController extends Controller
 
         return response()->json(
             DB::table('penarikan')->where('nasabah_id', $n->id)
-                ->select('id', 'nominal', 'biaya_admin', 'nominal_diterima', 'tujuan_tipe', 'tujuan_nomor', 'nama_pemilik', 'status', 'created_at')
+                ->select('id', 'nominal', 'biaya_admin', 'nominal_diterima', 'tujuan_tipe', 'tujuan_bank', 'tujuan_nomor', 'nama_pemilik', 'ref_gateway', 'status', 'created_at')
                 ->orderByDesc('id')->paginate($this->perPage($request))
         );
     }
@@ -133,8 +134,8 @@ class NasabahAppController extends Controller
     {
         $n = $this->nasabah($request);
         $p = DB::table('penarikan')->where('id', $id)->where('nasabah_id', $n->id)
-            ->first(['id', 'nominal', 'biaya_admin', 'nominal_diterima', 'tujuan_tipe', 'tujuan_nomor', 'nama_pemilik', 'status', 'created_at']);
-        if (!$p) {
+            ->first(['id', 'nominal', 'biaya_admin', 'nominal_diterima', 'tujuan_tipe', 'tujuan_bank', 'tujuan_nomor', 'nama_pemilik', 'ref_gateway', 'status', 'created_at']);
+        if (! $p) {
             throw new ApiException('PENARIKAN_TIDAK_DITEMUKAN', 'Penarikan tidak ditemukan.', 404);
         }
 

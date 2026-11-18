@@ -7,22 +7,30 @@ use Illuminate\Support\Str;
 /**
  * Simulasi untuk pengembangan dan tes. JANGAN dipakai di produksi.
  * - Nomor berakhiran 0000 dianggap tidak valid.
- * - Pengiriman selalu 'pending'; hasil datang lewat webhook atau cekStatus.
+ * - Payout selalu 'pending'; hasil datang lewat webhook simulasi atau cekStatus.
  */
 class FakeGateway implements GatewayInterface
 {
-    public function validasiRekening(string $tipe, string $nomor): array
+    public function daftarBank(): array
     {
-        if (str_ends_with($nomor, '0000')) {
-            throw new GatewayException('Rekening tidak ditemukan');
-        }
-
-        return ['nama' => 'PEMILIK ' . substr($nomor, -4)];
+        return [
+            ['code' => 'bca', 'name' => 'BCA'],
+            ['code' => 'mandiri', 'name' => 'Mandiri'],
+        ];
     }
 
-    public function kirim(object $penarikan): array
+    public function validasiRekening(string $bank, string $nomor): array
     {
-        return ['ref' => 'FAKE-' . Str::uuid(), 'status' => 'pending'];
+        if (! in_array($bank, ['bca', 'mandiri'], true) || str_ends_with($nomor, '0000')) {
+            throw new GatewayAccountException('Rekening tidak ditemukan');
+        }
+
+        return ['nama' => 'PEMILIK '.substr($nomor, -4)];
+    }
+
+    public function kirim(object $payout, string $idempotencyKey): array
+    {
+        return ['ref' => 'FAKE-'.Str::uuid(), 'status' => 'pending'];
     }
 
     public function cekStatus(string $ref): string

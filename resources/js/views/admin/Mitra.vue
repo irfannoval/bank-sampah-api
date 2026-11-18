@@ -8,7 +8,15 @@ import { usePaged } from '../../lib/paged';
 import { rp } from '../../lib/format';
 
 const daftar = usePaged('/admin/mitra');
-onMounted(() => daftar.cari());
+const banks = ref([]);
+onMounted(async () => {
+    try {
+        banks.value = await api.get('/gateway/banks');
+    } catch (e) {
+        daftar.galat.value = e.message;
+    }
+    await daftar.cari();
+});
 
 const form = ref(null);
 const galat = ref('');
@@ -17,7 +25,7 @@ const pinBaru = ref(null);
 
 const kosong = () => ({ id: null, nama: '', no_hp: '', nama_toko: '', alamat: '', bank_tujuan: '', no_rekening: '', atas_nama: '', status: 'aktif' });
 function buka(m = null) {
-    form.value = m ? { ...kosong(), ...m, alamat: m.alamat || '', bank_tujuan: m.bank_tujuan || '', no_rekening: m.no_rekening || '', atas_nama: m.atas_nama || '' } : kosong();
+    form.value = m ? { ...kosong(), ...m, alamat: m.alamat || '', bank_tujuan: (m.bank_tujuan || '').toLowerCase(), no_rekening: m.no_rekening || '', atas_nama: m.atas_nama || '' } : kosong();
     galat.value = '';
 }
 
@@ -89,7 +97,13 @@ async function resetPin(m) {
                 </template>
                 <div><label class="label" for="m-alamat">Alamat</label><input id="m-alamat" v-model="form.alamat" class="input"></div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div><label class="label" for="m-bank">Bank tujuan</label><input id="m-bank" v-model="form.bank_tujuan" class="input"></div>
+                    <div>
+                        <label class="label" for="m-bank">Bank tujuan</label>
+                        <select id="m-bank" v-model="form.bank_tujuan" class="input" :disabled="!banks.length">
+                            <option value="">Pilih bank</option>
+                            <option v-for="bank in banks" :key="bank.code" :value="bank.code">{{ bank.name }}</option>
+                        </select>
+                    </div>
                     <div><label class="label" for="m-rek">No. rekening</label><input id="m-rek" v-model="form.no_rekening" class="input" inputmode="numeric"></div>
                 </div>
                 <div><label class="label" for="m-an">Atas nama rekening</label><input id="m-an" v-model="form.atas_nama" class="input"></div>

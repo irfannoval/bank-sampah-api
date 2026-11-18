@@ -9,5 +9,5 @@ Artisan::command('inspire', function () {
 
 use Illuminate\Support\Facades\Schedule;
 
-// Cek penarikan yang masih pending (jaga-jaga webhook gateway tidak datang).
+// Kirim ulang payout yang belum mendapat referensi dan sinkronkan statusnya.
 Schedule::command('penarikan:cek-pending')->everyFiveMinutes()->withoutOverlapping();

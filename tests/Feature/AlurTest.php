@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -26,8 +27,8 @@ class AlurTest extends TestCase
     /** @return array{0: User, 1: int, 2: string} user nasabah, nasabah_id, qr_token */
     private function nasabah(string $saldo): array
     {
-        $u = $this->user('nasabah', '0822' . random_int(1000000, 9999999));
-        $nid = DB::table('nasabah')->insertGetId(['user_id' => $u->id, 'kode_nasabah' => 'NSB-' . $u->id, 'saldo' => $saldo]);
+        $u = $this->user('nasabah', '0822'.random_int(1000000, 9999999));
+        $nid = DB::table('nasabah')->insertGetId(['user_id' => $u->id, 'kode_nasabah' => 'NSB-'.$u->id, 'saldo' => $saldo]);
         $qr = bin2hex(random_bytes(8));
         DB::table('kartu')->insert(['nasabah_id' => $nid, 'qr_token' => $qr]);
         if (bccomp($saldo, '0', 2) > 0) { // ledger harus cocok dengan saldo awal
@@ -42,9 +43,9 @@ class AlurTest extends TestCase
 
     private function mitra(): User
     {
-        $u = $this->user('mitra', '0833' . random_int(1000000, 9999999));
+        $u = $this->user('mitra', '0833'.random_int(1000000, 9999999));
         DB::table('toko_mitra')->insert([
-            'user_id' => $u->id, 'nama_toko' => 'Warung Tes', 'bank_tujuan' => 'BCA', 'no_rekening' => '123456', 'atas_nama' => 'Tes',
+            'user_id' => $u->id, 'nama_toko' => 'Warung Tes', 'bank_tujuan' => 'bca', 'no_rekening' => '123456', 'atas_nama' => 'Tes',
         ]);
 
         return $u;
@@ -111,23 +112,58 @@ class AlurTest extends TestCase
     {
         [, , $qr] = $this->nasabah('100000.00');
         $mitra = $this->mitra();
-        $admin = $this->user('admin', '0811000002');
-
         Sanctum::actingAs($mitra);
         $sesi = $this->postJson('/api/v1/mitra/transaksi/mulai', ['qr_token' => $qr])->json('sesi_id');
         $this->postJson("/api/v1/mitra/transaksi/{$sesi}/konfirmasi", ['nominal' => '40000', 'pin' => '123456'], ['Idempotency-Key' => 'c1'])->assertStatus(201);
 
-        $id = $this->postJson('/api/v1/mitra/pencairan', [], ['Idempotency-Key' => 'c2'])
-            ->assertStatus(201)->assertJsonPath('nominal', '40000.00')->json('pencairan_id');
+        $pencairan = $this->postJson('/api/v1/mitra/pencairan', [], ['Idempotency-Key' => 'c2'])
+            ->assertStatus(201)->assertJsonPath('nominal', '40000.00')->assertJsonPath('status', 'pending')->json();
+        $id = $pencairan['pencairan_id'];
 
         // Transaksi yang sudah masuk pencairan tidak bisa dibatalkan mitra
         $trx = DB::table('transaksi_mitra')->value('id');
         $this->postJson("/api/v1/mitra/transaksi/{$trx}/batal", ['alasan' => 'coba batal'])
             ->assertStatus(422)->assertJsonPath('error.kode', 'SUDAH_DICAIRKAN');
 
-        Sanctum::actingAs($admin);
-        $this->postJson("/api/v1/admin/pencairan/{$id}/setujui")->assertOk();
-        $this->assertSame('disetujui', DB::table('pencairan_mitra')->where('id', $id)->value('status'));
+        $this->assertNotEmpty($pencairan['ref_gateway']);
+        $this->assertSame('40000.00', (string) DB::table('toko_mitra')->where('user_id', $mitra->id)->value('saldo_tagihan'));
+
+        $this->travel(6)->minutes();
+        Artisan::call('penarikan:cek-pending');
+        $this->assertSame('dibayar', DB::table('pencairan_mitra')->where('id', $id)->value('status'));
+        $this->assertSame('0.00', (string) DB::table('toko_mitra')->where('user_id', $mitra->id)->value('saldo_tagihan'));
+    }
+
+    public function test_payout_pending_lama_tanpa_snapshot_rekening_tidak_dikirim(): void
+    {
+        [, $nasabahId] = $this->nasabah('0.00');
+        $mitra = $this->mitra();
+        $tokoId = DB::table('toko_mitra')->where('user_id', $mitra->id)->value('id');
+        $createdAt = now()->subMinutes(10);
+
+        $penarikanId = DB::table('penarikan')->insertGetId([
+            'nasabah_id' => $nasabahId,
+            'nominal' => '20000.00',
+            'biaya_admin' => '0.00',
+            'nominal_diterima' => '20000.00',
+            'tujuan_tipe' => 'bank',
+            'tujuan_nomor' => '123456',
+            'status' => 'pending',
+            'created_at' => $createdAt,
+        ]);
+        $pencairanId = DB::table('pencairan_mitra')->insertGetId([
+            'toko_mitra_id' => $tokoId,
+            'nominal' => '10000.00',
+            'status' => 'pending',
+            'created_at' => $createdAt,
+        ]);
+
+        Artisan::call('penarikan:cek-pending');
+
+        $this->assertNull(DB::table('penarikan')->where('id', $penarikanId)->value('ref_gateway'));
+        $this->assertNull(DB::table('pencairan_mitra')->where('id', $pencairanId)->value('ref_gateway'));
+        $this->assertSame('pending', DB::table('penarikan')->where('id', $penarikanId)->value('status'));
+        $this->assertSame('pending', DB::table('pencairan_mitra')->where('id', $pencairanId)->value('status'));
     }
 
     public function test_penarikan_aturan_dan_webhook_refund(): void
@@ -136,14 +172,14 @@ class AlurTest extends TestCase
         Sanctum::actingAs($user);
 
         // di bawah minimal
-        $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '1000', 'tujuan_tipe' => 'e-wallet', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd1'])
+        $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '1000', 'tujuan_bank' => 'bca', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd1'])
             ->assertStatus(422)->assertJsonPath('error.kode', 'BATAS_PENARIKAN');
 
         // saldo tersisa kurang dari 10.000
-        $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '95000', 'tujuan_tipe' => 'e-wallet', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd2'])
+        $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '95000', 'tujuan_bank' => 'bca', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd2'])
             ->assertStatus(422)->assertJsonPath('error.kode', 'SALDO_MINIM_TERSISA');
 
-        $r = $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '20000', 'tujuan_tipe' => 'e-wallet', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd3'])
+        $r = $this->postJson('/api/v1/nasabah/penarikan', ['nominal' => '20000', 'tujuan_bank' => 'bca', 'tujuan_nomor' => '0812345678', 'pin' => '123456'], ['Idempotency-Key' => 'd3'])
             ->assertStatus(201)->assertJsonPath('status', 'pending');
         $this->assertSame('80000.00', (string) DB::table('nasabah')->where('id', $nid)->value('saldo'));
         $ref = $r->json('ref_gateway');

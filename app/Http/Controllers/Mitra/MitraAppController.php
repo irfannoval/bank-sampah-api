@@ -13,14 +13,12 @@ use Illuminate\Support\Facades\DB;
 /** Semua endpoint untuk peran 'mitra' (kasir toko). */
 class MitraAppController extends Controller
 {
-    public function __construct(private MitraTransaksiService $transaksi, private PencairanService $pencairan)
-    {
-    }
+    public function __construct(private MitraTransaksiService $transaksi, private PencairanService $pencairan) {}
 
     private function toko(Request $request): object
     {
         $toko = DB::table('toko_mitra')->where('user_id', $request->user()->id)->first();
-        if (!$toko) {
+        if (! $toko) {
             throw new ApiException('TIDAK_BERWENANG', 'Akun ini bukan toko mitra.', 403);
         }
 
@@ -54,7 +52,7 @@ class MitraAppController extends Controller
     public function konfirmasi(Request $request, string $sesiId): JsonResponse
     {
         $data = $request->validate([
-            'nominal' => ['required', 'regex:' . self::REGEX_NOMINAL],
+            'nominal' => ['required', 'regex:'.self::REGEX_NOMINAL],
             'pin' => ['required', 'digits:6'],
         ]);
 
@@ -88,7 +86,7 @@ class MitraAppController extends Controller
 
         return response()->json(
             DB::table('pencairan_mitra')->where('toko_mitra_id', $toko->id)
-                ->select('id', 'nominal', 'status', 'created_at', 'updated_at')->orderByDesc('id')->paginate($this->perPage($request))
+                ->select('id', 'nominal', 'status', 'bank_tujuan', 'ref_gateway', 'created_at', 'updated_at')->orderByDesc('id')->paginate($this->perPage($request))
         );
     }
 

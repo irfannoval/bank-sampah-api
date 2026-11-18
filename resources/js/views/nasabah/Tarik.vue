@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Halaman from '../../components/Halaman.vue';
 import Numpad from '../../components/Numpad.vue';
@@ -8,7 +8,8 @@ import { rp } from '../../lib/format';
 
 const router = useRouter();
 const langkah = ref('isi'); // isi -> periksa -> pin -> hasil
-const form = ref({ nominal: '', tipe: 'e-wallet', nomor: '' });
+const form = ref({ nominal: '', bank: '', nomor: '' });
+const banks = ref([]);
 const rincian = ref(null);
 const kunci = ref(null);
 const pin = ref('');
@@ -18,13 +19,21 @@ const hasil = ref(null);
 
 const nominal = computed(() => form.value.nominal.replace(/\D/g, ''));
 
+onMounted(async () => {
+    try {
+        banks.value = await api.get('/gateway/banks');
+    } catch (e) {
+        galat.value = e.message;
+    }
+});
+
 async function periksa() {
     galat.value = '';
     proses.value = true;
     try {
         const [b, r] = await Promise.all([
             api.get(`/nasabah/penarikan/biaya?nominal=${nominal.value}`),
-            api.post('/nasabah/penarikan/validasi-rekening', { tujuan_tipe: form.value.tipe, tujuan_nomor: form.value.nomor.trim() }),
+            api.post('/nasabah/penarikan/validasi-rekening', { tujuan_bank: form.value.bank, tujuan_nomor: form.value.nomor.trim() }),
         ]);
         rincian.value = { ...b, nama: r.nama };
         kunci.value = buatKunci();
@@ -48,7 +57,7 @@ async function kirim() {
     try {
         hasil.value = await api.post(
             '/nasabah/penarikan',
-            { nominal: nominal.value, tujuan_tipe: form.value.tipe, tujuan_nomor: form.value.nomor.trim(), pin: pin.value },
+            { nominal: nominal.value, tujuan_bank: form.value.bank, tujuan_nomor: form.value.nomor.trim(), pin: pin.value },
             { idem: kunci.value }
         );
         langkah.value = 'hasil';
@@ -70,11 +79,14 @@ async function kirim() {
             <p v-if="galat" class="pesan-error" role="alert">{{ galat }}</p>
             <div><label class="label" for="t-nominal">Jumlah penarikan (Rp)</label><input id="t-nominal" v-model="form.nominal" class="input" inputmode="numeric" placeholder="Contoh: 20000"></div>
             <div>
-                <label class="label" for="t-tipe">Tujuan</label>
-                <select id="t-tipe" v-model="form.tipe" class="input"><option value="e-wallet">E-wallet (GoPay, OVO, DANA, dll)</option><option value="bank">Rekening bank</option></select>
+                <label class="label" for="t-bank">Bank tujuan</label>
+                <select id="t-bank" v-model="form.bank" class="input" :disabled="!banks.length">
+                    <option value="" disabled>Pilih bank</option>
+                    <option v-for="bank in banks" :key="bank.code" :value="bank.code">{{ bank.name }}</option>
+                </select>
             </div>
             <div><label class="label" for="t-nomor">Nomor tujuan</label><input id="t-nomor" v-model="form.nomor" class="input" inputmode="numeric"></div>
-            <button class="btn btn-primary" :disabled="proses || !nominal || !form.nomor.trim()" @click="periksa">Lanjut</button>
+            <button class="btn btn-primary" :disabled="proses || !nominal || !form.bank || !form.nomor.trim()" @click="periksa">Lanjut</button>
         </template>
 
         <template v-else-if="langkah === 'periksa'">
@@ -103,7 +115,8 @@ async function kirim() {
             <div class="card text-center" data-testid="hasil">
                 <strong class="text-2xl text-brand-600">Penarikan diproses</strong>
                 <strong class="text-4xl">{{ rp(hasil.nominal_diterima) }}</strong>
-                <span class="text-sm text-muted">akan masuk ke {{ hasil.tujuan_nomor }}. Status: {{ hasil.status === 'pending' ? 'sedang diproses' : hasil.status }}.</span>
+                <span v-if="hasil.ref_gateway" class="text-sm text-muted">Payout {{ hasil.ref_gateway }} untuk rekening {{ hasil.tujuan_bank }} {{ hasil.tujuan_nomor }} menunggu persetujuan/transfer Midtrans.</span>
+                <span v-else class="text-sm text-amber-700">Payout belum mendapat referensi dari Midtrans. Sistem akan mencoba ulang; jangan ajukan penarikan yang sama lagi.</span>
             </div>
             <button class="btn btn-primary" @click="router.replace('/nasabah')">Selesai</button>
         </template>

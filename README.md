@@ -4,15 +4,17 @@ API untuk sistem bank sampah: nasabah ber-kartu QR, toko mitra, dan admin.
 Mengikuti Dokumen Perancangan Sistem v1.2, bagian 14 (Rancangan API).
 
 **Isi:** autentikasi PIN, kelola nasabah/mitra/kartu/jenis sampah, setoran dan ledger saldo,
-belanja di mitra (scan kartu + PIN), pembatalan, pencairan mitra, penarikan + webhook gateway,
+belanja di mitra (scan kartu + PIN), pembatalan, pencairan mitra, penarikan + pemeriksaan status payout,
 laporan, audit log, pengaturan sistem.
 
 **Frontend (Vue 3 + Tailwind, bisa dipasang sebagai PWA):**
 - **Toko mitra (HP):** login, scan kartu, profil dan saldo nasabah, nominal, PIN, hasil, riwayat, pembatalan, pencairan.
-- **Admin (komputer atau HP):** input setoran, riwayat setoran, nasabah + kartu (daftar, cetak kartu ber-QR, blokir, ganti, reset PIN, koreksi saldo), jenis sampah dan harga, toko mitra, transaksi mitra, pencairan (setujui, tolak, bayar + bukti transfer), penarikan untuk nasabah tanpa HP, laporan, pengaturan, audit dan cek saldo.
+- **Admin (komputer atau HP):** input setoran, riwayat setoran, nasabah + kartu (daftar, cetak kartu ber-QR, blokir, ganti, reset PIN, koreksi saldo), jenis sampah dan harga, toko mitra, transaksi mitra, pemantauan pencairan Midtrans, penarikan untuk nasabah tanpa HP, laporan, pengaturan, audit dan cek saldo.
 - **Nasabah (HP):** saldo dan setoran bulan ini, riwayat saldo, setoran saya, toko mitra, tarik saldo, riwayat penarikan, ubah PIN.
 
-**Belum ada:** driver payment gateway asli (baru simulasi) dan hosting HTTPS.
+**Payment gateway:** tersedia driver payout bank Midtrans Iris dan simulasi `FakeGateway`.
+Penerimaan saldo nasabah dari setoran sampah dicatat admin di aplikasi; bukan pembayaran masuk Midtrans.
+Produksi tetap memerlukan kredensial/aktivasi Iris dan hosting HTTPS.
 
 ## Kebutuhan
 PHP 8.3+ (ekstensi `bcmath`, `pdo_pgsql`, `mbstring`), Composer, PostgreSQL 14+.
@@ -22,7 +24,7 @@ PHP 8.3+ (ekstensi `bcmath`, `pdo_pgsql`, `mbstring`), Composer, PostgreSQL 14+.
 composer install
 cp .env.example .env
 php artisan key:generate
-# edit .env: DB_PASSWORD, SEED_ADMIN_PIN, GATEWAY_WEBHOOK_SECRET
+# edit .env: DB_PASSWORD, SEED_ADMIN_PIN
 createdb bank_sampah
 php artisan migrate --seed
 php artisan serve
@@ -44,7 +46,7 @@ Saat mengubah tampilan, jalankan `npm run dev` di terminal kedua (sambil `php ar
 
 Untuk mencoba cepat: jalankan `scripts/siapkan-data.ps1` (membuat jenis sampah, nasabah, dan toko mitra, lalu menampilkan nomor HP, PIN, dan kode kartu). Atau lewat browser: login sebagai admin utama (`SEED_ADMIN_HP` / `SEED_ADMIN_PIN`), lalu daftarkan jenis sampah, nasabah, dan toko mitra dari menu admin.
 
-**Alur harian:** nasabah datang membawa kartu -> admin scan kartu di *Input Setoran* -> saldo masuk. Di warung, kasir scan kartu -> nasabah mengetik PIN di HP kasir -> saldo nasabah terpotong dan saldo aplikasi toko langsung bertambah. Jika mitra ingin transfer saldo itu ke rekening bank, mitra mengajukan pencairan dan admin memproses transfernya secara terpisah.
+**Alur harian:** nasabah datang membawa kartu -> admin scan kartu di *Input Setoran* -> nilai setoran masuk ke saldo aplikasi. Di warung, kasir scan kartu -> nasabah mengetik PIN di HP kasir -> saldo nasabah terpotong dan saldo aplikasi toko langsung bertambah. Pencairan nasabah atau mitra membuat payout Midtrans Iris; approver menyetujui payout dengan OTP di Iris, lalu aplikasi menyinkronkan hasilnya.
 
 **Cetak kartu:** menu *Nasabah* -> pilih nasabah -> *Cetak*. Ukuran kartu 85,6 x 54 mm (standar kartu ATM). Pilih "Save as PDF" atau printer kartu. QR berisi token acak, bukan saldo atau data pribadi.
 
@@ -89,12 +91,15 @@ Alur belanja: `POST /mitra/transaksi/mulai` (kirim `qr_token`) lalu
 - **Masa berlaku token** = 480 menit (`SANCTUM_EXPIRATION`), usulan.
 - Pembatalan transaksi yang pencairannya sudah **dibayar** tidak bisa lewat API; diselesaikan manual.
 
-## Memasang payment gateway asli
-1. Buat kelas yang mengimplementasi `App\Services\Gateway\GatewayInterface` (`validasiRekening`, `kirim`, `cekStatus`).
-2. Daftarkan di `AppServiceProvider` (`match` pada `config('gateway.driver')`) dan set `GATEWAY_DRIVER` di `.env`.
-3. Sesuaikan `WebhookController` dengan format tanda tangan dan isi webhook provider.
-4. `FakeGateway` hanya untuk pengembangan. Jangan dipakai di produksi.
-Perintah `penarikan:cek-pending` (dijadwalkan tiap 5 menit di `routes/console.php`) menjaga penarikan yang webhook-nya tidak datang. Pastikan scheduler berjalan: `* * * * * php artisan schedule:run`.
+## Mengaktifkan Midtrans Iris
+1. Pastikan akun Midtrans Anda telah mengaktifkan Iris dan memiliki Iris API key untuk membuat payout.
+2. Isi `.env` dengan `GATEWAY_DRIVER=midtrans`, `MIDTRANS_IRIS_API_KEY`, dan `MIDTRANS_ENVIRONMENT=sandbox` atau `production`.
+3. Daftar bank dan validasi rekening diambil dari Iris. Nasabah dan mitra hanya dapat mencairkan ke rekening bank yang didukung.
+4. Pengajuan nasabah dan mitra langsung dibuat sebagai payout di Iris. **Payout Iris berstatus antre sampai approver menyetujuinya dengan OTP di Midtrans Iris**; permintaan dari aplikasi tidak langsung mengirim uang.
+5. Saldo nasabah dikreditkan admin ketika setoran sampah disimpan. Belanja nasabah tetap memindahkan saldo di ledger internal; keduanya tidak memanggil payment gateway.
+6. Sebelum mengaktifkan scheduler, rekonsiliasi pengajuan pending lama yang dibuat sebelum integrasi karena data rekeningnya tidak tersimpan sebagai snapshot. Pengajuan lama tanpa snapshot tidak dikirim otomatis. Jalankan scheduler tiap menit (`* * * * * php artisan schedule:run`). Perintah `penarikan:cek-pending` mengirim ulang permintaan baru yang belum mendapat referensi dan memeriksa status payout setiap 5 menit. Saldo tagihan mitra baru berkurang setelah Iris mengonfirmasi payout berhasil.
+
+`FakeGateway` hanya untuk pengembangan dan tes. Jangan gunakan di produksi. Kredensial Iris jangan disimpan di source code atau dikirim ke klien.
 
 ## Struktur
 ```

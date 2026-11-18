@@ -8,14 +8,19 @@ namespace App\Services\Gateway;
  */
 interface GatewayInterface
 {
-    /** @return array{nama: string} nama pemilik rekening/e-wallet. Lempar GatewayException jika tidak valid. */
-    public function validasiRekening(string $tipe, string $nomor): array;
+    /** @return list<array{code: string, name: string}> */
+    public function daftarBank(): array;
+
+    /** @return array{nama: string} nama pemilik rekening. */
+    public function validasiRekening(string $bank, string $nomor): array;
 
     /**
-     * Kirim dana ke nasabah.
+     * Buat payout ke rekening penerima.
+     *
+     * @param  object{tujuan_bank: string, tujuan_nomor: string, nama_pemilik: string, nominal_dikirim: string, catatan: string}  $payout
      * @return array{ref: string, status: string} status: pending|berhasil|gagal
      */
-    public function kirim(object $penarikan): array;
+    public function kirim(object $payout, string $idempotencyKey): array;
 
     /** @return string pending|berhasil|gagal */
     public function cekStatus(string $ref): string;
