@@ -42,16 +42,17 @@ async function ajukan() {
 <template>
     <Halaman judul="Pencairan" kembali="/mitra">
         <div v-if="beranda" class="card">
-            <span class="text-sm text-muted">Saldo tagihan</span>
-            <strong class="text-4xl">{{ rp(beranda.saldo_tagihan) }}</strong>
-            <span class="text-sm text-muted">Sedang diajukan: {{ rp(beranda.sedang_diajukan) }}</span>
+            <span class="text-sm text-muted">Saldo aplikasi toko</span>
+            <strong class="text-4xl">{{ rp(beranda.saldo_toko) }}</strong>
+            <span class="text-sm text-muted">Saldo transaksi sudah masuk langsung. Pencairan ini adalah transfer ke rekening toko.</span>
+            <span class="text-sm text-muted">Sedang diproses: {{ rp(beranda.sedang_diajukan) }}</span>
         </div>
 
         <p v-if="galat" class="pesan-error" role="alert">{{ galat }}</p>
         <p v-if="info" class="rounded-lg border border-brand-600 bg-brand-50 px-4 py-3 text-sm">{{ info }}</p>
 
-        <button class="btn btn-primary" :disabled="proses" @click="ajukan">Ajukan pencairan seluruh tagihan</button>
-        <p class="text-center text-xs text-muted">Pencairan mencakup semua transaksi yang belum dicairkan.</p>
+        <button class="btn btn-primary" :disabled="proses" @click="ajukan">Ajukan transfer ke rekening</button>
+        <p class="text-center text-xs text-muted">Permintaan transfer rekening tetap diproses admin. Saldo aplikasi toko tidak menunggu persetujuan ini.</p>
 
         <h2 class="mt-2 font-bold">Riwayat pencairan</h2>
         <div v-for="p in daftar" :key="p.id" class="card flex-row items-center justify-between !p-4">

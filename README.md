@@ -44,7 +44,7 @@ Saat mengubah tampilan, jalankan `npm run dev` di terminal kedua (sambil `php ar
 
 Untuk mencoba cepat: jalankan `scripts/siapkan-data.ps1` (membuat jenis sampah, nasabah, dan toko mitra, lalu menampilkan nomor HP, PIN, dan kode kartu). Atau lewat browser: login sebagai admin utama (`SEED_ADMIN_HP` / `SEED_ADMIN_PIN`), lalu daftarkan jenis sampah, nasabah, dan toko mitra dari menu admin.
 
-**Alur harian:** nasabah datang membawa kartu -> admin scan kartu di *Input Setoran* -> saldo masuk. Di warung, kasir scan kartu -> nasabah mengetik PIN di HP kasir -> saldo terpotong. Mitra mengajukan pencairan -> admin setujui, transfer, unggah bukti -> tandai dibayar.
+**Alur harian:** nasabah datang membawa kartu -> admin scan kartu di *Input Setoran* -> saldo masuk. Di warung, kasir scan kartu -> nasabah mengetik PIN di HP kasir -> saldo nasabah terpotong dan saldo aplikasi toko langsung bertambah. Jika mitra ingin transfer saldo itu ke rekening bank, mitra mengajukan pencairan dan admin memproses transfernya secara terpisah.
 
 **Cetak kartu:** menu *Nasabah* -> pilih nasabah -> *Cetak*. Ukuran kartu 85,6 x 54 mm (standar kartu ATM). Pilih "Save as PDF" atau printer kartu. QR berisi token acak, bukan saldo atau data pribadi.
 

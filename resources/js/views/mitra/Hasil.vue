@@ -44,6 +44,7 @@ async function batalkan() {
             <strong class="text-4xl">{{ rp(trx.hasil.nominal) }}</strong>
             <span>{{ trx.nasabah?.nama }}</span>
             <span v-if="!dibatalkan" class="text-sm text-muted">Sisa saldo nasabah: {{ rp(trx.hasil.saldo_nasabah_sesudah) }}</span>
+            <span v-if="!dibatalkan" class="text-sm text-brand-700">Saldo aplikasi toko bertambah langsung. Saldo sekarang: {{ rp(trx.hasil.saldo_toko_sesudah) }}</span>
             <span v-else class="text-sm text-muted">Saldo nasabah sudah dikembalikan.</span>
         </div>
 

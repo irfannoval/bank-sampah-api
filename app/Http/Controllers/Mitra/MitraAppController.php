@@ -31,12 +31,14 @@ class MitraAppController extends Controller
     {
         $toko = $this->toko($request);
         $dikunci = DB::table('pencairan_mitra')->where('toko_mitra_id', $toko->id)->whereIn('status', ['pending', 'disetujui'])->sum('nominal');
+        $saldoToko = DB::table('toko_mitra')->where('id', $toko->id)->value('saldo_tagihan');
         $hariIni = DB::table('transaksi_mitra')->where('toko_mitra_id', $toko->id)->where('status', 'berhasil')
             ->where('created_at', '>=', now()->startOfDay());
 
         return response()->json([
             'nama_toko' => $toko->nama_toko,
-            'saldo_tagihan' => $toko->saldo_tagihan,
+            'saldo_toko' => $saldoToko,
+            'saldo_tagihan' => $saldoToko,
             'sedang_diajukan' => bcadd((string) $dikunci, '0', 2),
             'hari_ini' => ['jumlah' => $hariIni->count(), 'total' => bcadd((string) $hariIni->sum('nominal'), '0', 2)],
         ]);

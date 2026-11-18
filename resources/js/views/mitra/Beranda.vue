@@ -35,9 +35,10 @@ async function keluar() {
         <p v-if="galat" class="pesan-error">{{ galat }}</p>
 
         <div v-if="data" class="card">
-            <span class="text-sm text-muted">Saldo tagihan</span>
-            <strong class="text-4xl">{{ rp(data.saldo_tagihan) }}</strong>
-            <span class="text-sm text-muted">Sedang diajukan pencairan: {{ rp(data.sedang_diajukan) }}</span>
+            <span class="text-sm text-muted">Saldo aplikasi toko</span>
+            <strong class="text-4xl">{{ rp(data.saldo_toko) }}</strong>
+            <span class="text-sm text-muted">Saldo bertambah langsung setiap transaksi berhasil.</span>
+            <span class="text-sm text-muted">Sedang diproses pencairan ke rekening: {{ rp(data.sedang_diajukan) }}</span>
             <span class="mt-1 text-sm text-muted">Hari ini: {{ data.hari_ini.jumlah }} transaksi, {{ rp(data.hari_ini.total) }}</span>
         </div>
 

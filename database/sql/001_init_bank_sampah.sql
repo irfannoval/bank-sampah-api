@@ -244,7 +244,7 @@ CREATE INDEX ix_audit_user             ON audit_log (user_id, created_at DESC);
 -- ---------------------------------------------------------------------
 -- PROTEKSI: mutasi_saldo & audit_log tidak boleh diedit/dihapus
 -- ---------------------------------------------------------------------
-CREATE FUNCTION tolak_ubah_hapus() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION tolak_ubah_hapus() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION 'Tabel % hanya boleh ditambah (append-only)', TG_TABLE_NAME;
 END;

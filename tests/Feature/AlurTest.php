@@ -77,11 +77,13 @@ class AlurTest extends TestCase
             ->assertStatus(422)->assertJsonPath('error.kode', 'PIN_SALAH');
 
         $r = $this->postJson("/api/v1/mitra/transaksi/{$sesi}/konfirmasi", ['nominal' => '20000', 'pin' => '123456'], ['Idempotency-Key' => 'a2'])
-            ->assertStatus(201);
+            ->assertStatus(201)
+            ->assertJsonPath('saldo_toko_sesudah', '20000.00');
         $trxId = $r->json('transaksi_id');
 
         $this->assertSame('30000.00', (string) DB::table('nasabah')->where('id', $nid)->value('saldo'));
         $this->assertSame('20000.00', (string) DB::table('toko_mitra')->where('user_id', $mitra->id)->value('saldo_tagihan'));
+        $this->getJson('/api/v1/mitra/beranda')->assertOk()->assertJsonPath('saldo_toko', '20000.00');
 
         // Kirim ulang dengan kunci sama: hasil sama, tidak diproses dua kali
         $this->postJson("/api/v1/mitra/transaksi/{$sesi}/konfirmasi", ['nominal' => '20000', 'pin' => '123456'], ['Idempotency-Key' => 'a2'])

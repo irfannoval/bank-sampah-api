@@ -126,7 +126,14 @@ class MitraTransaksiService
                 DB::table('toko_mitra')->where('id', $toko->id)->lockForUpdate()->first();
                 DB::table('toko_mitra')->where('id', $toko->id)->increment('saldo_tagihan', $nominal);
 
-                return ['transaksi_id' => $trxId, 'nominal' => $nominal, 'saldo_nasabah_sesudah' => $mutasi->saldo_sesudah];
+                $saldoTokoSesudah = DB::table('toko_mitra')->where('id', $toko->id)->value('saldo_tagihan');
+
+                return [
+                    'transaksi_id' => $trxId,
+                    'nominal' => $nominal,
+                    'saldo_nasabah_sesudah' => $mutasi->saldo_sesudah,
+                    'saldo_toko_sesudah' => $saldoTokoSesudah,
+                ];
             });
 
             Cache::forget($kunci);
