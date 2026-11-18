@@ -28,6 +28,20 @@ class PenarikanController extends Controller
         return response()->json($q->paginate($this->perPage($request)));
     }
 
+    public function biaya(Request $request): JsonResponse
+    {
+        $data = $request->validate(['nominal' => ['required', 'regex:' . self::REGEX_NOMINAL]]);
+
+        return response()->json($this->penarikan->biaya($data['nominal']));
+    }
+
+    public function validasiRekening(Request $request): JsonResponse
+    {
+        $data = $request->validate(['tujuan_tipe' => ['required', 'in:bank,e-wallet'], 'tujuan_nomor' => ['required', 'string', 'max:40']]);
+
+        return response()->json($this->penarikan->validasiRekening($data['tujuan_tipe'], $data['tujuan_nomor']));
+    }
+
     /** Penarikan untuk nasabah tanpa HP: PIN diketik nasabah di layar admin. */
     public function store(Request $request): JsonResponse
     {

@@ -50,6 +50,8 @@ Route::prefix('v1')->group(function () {
                 Route::patch('mitra/{id}', [Admin\MitraController::class, 'update'])->whereNumber('id');
                 Route::post('mitra/{id}/reset-pin', [Admin\MitraController::class, 'resetPin'])->whereNumber('id');
 
+                Route::get('penarikan/biaya', [Admin\PenarikanController::class, 'biaya']);
+                Route::post('penarikan/validasi-rekening', [Admin\PenarikanController::class, 'validasiRekening']);
                 Route::get('penarikan', [Admin\PenarikanController::class, 'index']);
                 Route::post('penarikan', [Admin\PenarikanController::class, 'store'])->middleware(Idempotency::class);
 

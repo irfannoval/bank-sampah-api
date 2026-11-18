@@ -7,9 +7,12 @@ Mengikuti Dokumen Perancangan Sistem v1.2, bagian 14 (Rancangan API).
 belanja di mitra (scan kartu + PIN), pembatalan, pencairan mitra, penarikan + webhook gateway,
 laporan, audit log, pengaturan sistem.
 
-**Frontend (Vue 3 + Tailwind, PWA):** layar kasir toko mitra sudah ada (login, scan kartu, profil, nominal, PIN, hasil, riwayat, pembatalan, pencairan). Layar admin dan nasabah belum.
+**Frontend (Vue 3 + Tailwind, bisa dipasang sebagai PWA):**
+- **Toko mitra (HP):** login, scan kartu, profil dan saldo nasabah, nominal, PIN, hasil, riwayat, pembatalan, pencairan.
+- **Admin (komputer atau HP):** input setoran, riwayat setoran, nasabah + kartu (daftar, cetak kartu ber-QR, blokir, ganti, reset PIN, koreksi saldo), jenis sampah dan harga, toko mitra, transaksi mitra, pencairan (setujui, tolak, bayar + bukti transfer), penarikan untuk nasabah tanpa HP, laporan, pengaturan, audit dan cek saldo.
+- **Nasabah (HP):** saldo dan setoran bulan ini, riwayat saldo, setoran saya, toko mitra, tarik saldo, riwayat penarikan, ubah PIN.
 
-**Belum ada:** layar admin, layar nasabah, dan driver payment gateway asli.
+**Belum ada:** driver payment gateway asli (baru simulasi) dan hosting HTTPS.
 
 ## Kebutuhan
 PHP 8.3+ (ekstensi `bcmath`, `pdo_pgsql`, `mbstring`), Composer, PostgreSQL 14+.
@@ -39,7 +42,11 @@ Saat mengubah tampilan, jalankan `npm run dev` di terminal kedua (sambil `php ar
 
 **Kamera untuk scan QR hanya bisa dipakai lewat HTTPS** (atau `localhost`). Untuk uji coba di HP, aplikasi harus di-hosting dengan HTTPS. Tanpa kamera, kasir bisa mengetik/menempel kode kartu.
 
-Untuk mencoba layar kasir: daftarkan toko mitra dan nasabah lewat API (lihat `uji-alur.ps1`), lalu login di browser memakai nomor HP dan PIN awal toko mitra. Kode kartu nasabah = `qr_token` dari balasan pendaftaran nasabah.
+Untuk mencoba cepat: jalankan `scripts/siapkan-data.ps1` (membuat jenis sampah, nasabah, dan toko mitra, lalu menampilkan nomor HP, PIN, dan kode kartu). Atau lewat browser: login sebagai admin utama (`SEED_ADMIN_HP` / `SEED_ADMIN_PIN`), lalu daftarkan jenis sampah, nasabah, dan toko mitra dari menu admin.
+
+**Alur harian:** nasabah datang membawa kartu -> admin scan kartu di *Input Setoran* -> saldo masuk. Di warung, kasir scan kartu -> nasabah mengetik PIN di HP kasir -> saldo terpotong. Mitra mengajukan pencairan -> admin setujui, transfer, unggah bukti -> tandai dibayar.
+
+**Cetak kartu:** menu *Nasabah* -> pilih nasabah -> *Cetak*. Ukuran kartu 85,6 x 54 mm (standar kartu ATM). Pilih "Save as PDF" atau printer kartu. QR berisi token acak, bukan saldo atau data pribadi.
 
 ## Tes
 ```bash
@@ -98,4 +105,6 @@ app/Http/Middleware/  RoleMiddleware, Idempotency
 database/sql/         skema inti (PostgreSQL) yang dijalankan migration
 routes/api.php        semua endpoint (/api/v1/...)
 tests/Feature/        UangTest (inti uang), AlurTest (alur HTTP)
+resources/js/         aplikasi Vue (views/admin, views/mitra, views/nasabah)
+scripts/              skrip PowerShell: siapkan-data.ps1, uji-alur.ps1
 ```

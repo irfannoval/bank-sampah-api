@@ -47,5 +47,6 @@ async function keluar() {
             <router-link to="/mitra/riwayat" class="btn btn-ghost">Riwayat</router-link>
             <router-link to="/mitra/pencairan" class="btn btn-ghost">Pencairan</router-link>
         </div>
+        <router-link to="/ubah-pin" class="min-h-11 py-3 text-center text-sm text-brand-700 underline">Ubah PIN</router-link>
     </Halaman>
 </template>

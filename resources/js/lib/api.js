@@ -57,3 +57,16 @@ export const api = {
     post: (path, body = {}, opts) => request('POST', path, body, opts),
     patch: (path, body = {}, opts) => request('PATCH', path, body, opts),
 };
+
+/** Unduh berkas yang butuh login (mis. bukti transfer). Mengembalikan Blob. */
+export async function unduh(path) {
+    const token = localStorage.getItem('bs_token');
+    let res;
+    try {
+        res = await fetch(BASE + path, { headers: { Authorization: 'Bearer ' + token } });
+    } catch {
+        throw new ApiError(0, 'JARINGAN', 'Tidak bisa terhubung ke server.');
+    }
+    if (!res.ok) throw new ApiError(res.status, 'ERROR', 'Berkas tidak ditemukan.');
+    return res.blob();
+}
